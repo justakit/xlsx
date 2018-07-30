@@ -39,6 +39,7 @@ type StreamFileBuilder struct {
 	cellTypeToStyleIds map[CellType]int
 	maxStyleId         int
 	styleIds           [][]int
+	types              []*CellType
 }
 
 const (
@@ -116,6 +117,7 @@ func (sb *StreamFileBuilder) AddSheet(name string, headers []string, cellTypes [
 		}
 		sb.styleIds[len(sb.styleIds)-1] = append(sb.styleIds[len(sb.styleIds)-1], cellStyleIndex)
 	}
+	sb.types = cellTypes
 	return nil
 }
 
@@ -159,6 +161,7 @@ func (sb *StreamFileBuilder) Build() (*StreamFile, error) {
 	if err := es.NextSheet(); err != nil {
 		return nil, err
 	}
+	es.types = sb.types
 	return es, nil
 }
 

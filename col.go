@@ -20,9 +20,9 @@ type Col struct {
 func (c *Col) SetType(cellType CellType) {
 	switch cellType {
 	case CellTypeString:
-		c.numFmt = builtInNumFmt[builtInNumFmtIndex_STRING]
+		c.numFmt = builtInNumFmt[builtInNumFmtIndex_GENERAL]
 	case CellTypeNumeric:
-		c.numFmt = builtInNumFmt[builtInNumFmtIndex_INT]
+		c.numFmt = builtInNumFmt[builtInNumFmtIndex_GENERAL]
 	case CellTypeBool:
 		c.numFmt = builtInNumFmt[builtInNumFmtIndex_GENERAL] //TEMP
 	case CellTypeInline:

@@ -16,6 +16,7 @@ type StreamFile struct {
 	currentSheet   *streamSheet
 	styleIds       [][]int
 	err            error
+	types          []*CellType
 }
 
 type streamSheet struct {
@@ -86,15 +87,29 @@ func (sf *StreamFile) write(cells []string) error {
 		// n (Number): Cell containing a number.
 		// s (Shared String): Cell containing a shared string.
 		// str (String): Cell containing a formula string.
+
 		cellCoordinate := GetCellIDStringFromCoords(colIndex, sf.currentSheet.rowCount-1)
-		cellType := "inlineStr"
-		cellOpen := `<c r="` + cellCoordinate + `" t="` + cellType + `"`
-		// Add in the style id if the cell isn't using the default style
-		if colIndex < len(sf.currentSheet.styleIds) && sf.currentSheet.styleIds[colIndex] != 0 {
-			cellOpen += ` s="` + strconv.Itoa(sf.currentSheet.styleIds[colIndex]) + `"`
+
+		var cellOpen string
+		var cellClose string
+		switch *sf.types[colIndex] {
+		case CellTypeString:
+			cellData = strconv.Itoa(sf.xlsxFile.referenceTable.AddString(cellData))
+			cellType := "s"
+			cellOpen = `<c r="` + cellCoordinate + `" t="` + cellType + `"`
+			cellOpen += `><v>`
+			cellClose = `</v></c>`
+		case CellTypeNumeric:
+			cellType := "n"
+			cellOpen = `<c r="` + cellCoordinate + `" t="` + cellType + `"`
+			cellOpen += `><v>`
+			cellClose = `</v></c>`
+		default:
+			cellType := "inlineStr"
+			cellOpen = `<c r="` + cellCoordinate + `" t="` + cellType + `"`
+			cellOpen += `><is><t>`
+			cellClose = `</t></is></c>`
 		}
-		cellOpen += `><is><t>`
-		cellClose := `</t></is></c>`
 
 		if err := sf.currentSheet.write(cellOpen); err != nil {
 			return err
@@ -185,7 +200,26 @@ func (sf *StreamFile) Close() error {
 			return err
 		}
 	}
-	err := sf.zipWriter.Close()
+	marshal := func(thing interface{}) (string, error) {
+		body, err := xml.Marshal(thing)
+		if err != nil {
+			return "", err
+		}
+		return xml.Header + string(body), nil
+	}
+	xSST := sf.xlsxFile.referenceTable.makeXLSXSST()
+	parts := make(map[string]string)
+	var err error
+	parts["xl/sharedStrings.xml"], err = marshal(xSST)
+	w, err := sf.zipWriter.Create("xl/sharedStrings.xml")
+	if err != nil {
+		return err
+	}
+	_, err = w.Write([]byte(parts["xl/sharedStrings.xml"]))
+	if err != nil {
+		return err
+	}
+	err = sf.zipWriter.Close()
 	if err != nil {
 		sf.err = err
 	}
