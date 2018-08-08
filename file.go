@@ -31,9 +31,9 @@ const NoRowLimit int = -1
 // Create a new File
 func NewFile() *File {
 	return &File{
-		Sheet:          make(map[string]*Sheet),
-		Sheets:         make([]*Sheet, 0),
-		DefinedNames:   make([]*xlsxDefinedName, 0),
+		Sheet:        make(map[string]*Sheet),
+		Sheets:       make([]*Sheet, 0),
+		DefinedNames: make([]*xlsxDefinedName, 0),
 	}
 }
 
@@ -231,8 +231,8 @@ func replaceRelationshipsNameSpace(workbookMarshal string) string {
 // in terms of the structure of an XLSX file.
 func (f *File) MarshallParts() (map[string]string, error) {
 	var parts map[string]string
-	f.referenceTable = NewSharedStringRefTable()
-	f.referenceTable.isWrite = true
+	var refTable = NewSharedStringRefTable()
+	refTable.isWrite = true
 	var workbookRels WorkBookRels = make(WorkBookRels)
 	var err error
 	var workbook xlsxWorkbook
@@ -259,7 +259,7 @@ func (f *File) MarshallParts() (map[string]string, error) {
 		return nil, err
 	}
 	for _, sheet := range f.Sheets {
-		xSheet := sheet.makeXLSXSheet(f.referenceTable, f.styles)
+		xSheet := sheet.makeXLSXSheet(refTable, f.styles)
 		rId := fmt.Sprintf("rId%d", sheetIndex)
 		sheetId := strconv.Itoa(sheetIndex)
 		sheetPath := fmt.Sprintf("worksheets/sheet%d.xml", sheetIndex)
@@ -298,7 +298,7 @@ func (f *File) MarshallParts() (map[string]string, error) {
 	parts["docProps/core.xml"] = TEMPLATE_DOCPROPS_CORE
 	parts["xl/theme/theme1.xml"] = TEMPLATE_XL_THEME_THEME
 
-	xSST := f.referenceTable.makeXLSXSST()
+	xSST := refTable.makeXLSXSST()
 	parts["xl/sharedStrings.xml"], err = marshal(xSST)
 	if err != nil {
 		return parts, err

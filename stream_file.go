@@ -70,9 +70,9 @@ func (sf *StreamFile) write(cells []string) error {
 	if sf.currentSheet == nil {
 		return NoCurrentSheetError
 	}
-	if len(cells) != sf.currentSheet.columnCount {
-		return WrongNumberOfRowsError
-	}
+	// if len(cells) != sf.currentSheet.columnCount {
+	// 	return WrongNumberOfRowsError
+	// }
 	sf.currentSheet.rowCount++
 	if err := sf.currentSheet.write(`<row r="` + strconv.Itoa(sf.currentSheet.rowCount) + `">`); err != nil {
 		return err
@@ -94,11 +94,10 @@ func (sf *StreamFile) write(cells []string) error {
 		var cellClose string
 		switch *sf.types[colIndex] {
 		case CellTypeString:
-			cellData = strconv.Itoa(sf.xlsxFile.referenceTable.AddString(cellData))
-			cellType := "s"
+			cellType := "inlineStr"
 			cellOpen = `<c r="` + cellCoordinate + `" t="` + cellType + `"`
-			cellOpen += `><v>`
-			cellClose = `</v></c>`
+			cellOpen += `><is><t>`
+			cellClose = `</t></is></c>`
 		case CellTypeNumeric:
 			cellType := "n"
 			cellOpen = `<c r="` + cellCoordinate + `" t="` + cellType + `"`
@@ -125,6 +124,57 @@ func (sf *StreamFile) write(cells []string) error {
 		return err
 	}
 	return sf.zipWriter.Flush()
+}
+
+// AddHeader -- add cell to first row
+// return int index of column
+func (sf *StreamFile) AddHeader(cellData string, cellType *CellType) (int, error) {
+	sf.types = append(sf.types, cellType)
+	if sf.currentSheet == nil {
+		return 0, NoCurrentSheetError
+	}
+
+	if cellType == nil {
+		return 0, errors.New("cell type cannot be nil")
+	}
+	cellCoordinate := GetCellIDStringFromCoords(sf.currentSheet.columnCount, 0)
+	if err := sf.currentSheet.write(`<row r="` + "1" + `">`); err != nil {
+		return 0, err
+	}
+	var cellOpen string
+	var cellClose string
+	switch *cellType {
+	case CellTypeString:
+		cellType := "inlineStr"
+		cellOpen = `<c r="` + cellCoordinate + `" t="` + cellType + `"`
+		cellOpen += `><is><t>`
+		cellClose = `</t></is></c>`
+	case CellTypeNumeric:
+		cellType := "n"
+		cellOpen = `<c r="` + cellCoordinate + `" t="` + cellType + `"`
+		cellOpen += `><v>`
+		cellClose = `</v></c>`
+	default:
+		cellType := "inlineStr"
+		cellOpen = `<c r="` + cellCoordinate + `" t="` + cellType + `"`
+		cellOpen += `><is><t>`
+		cellClose = `</t></is></c>`
+	}
+
+	if err := sf.currentSheet.write(cellOpen); err != nil {
+		return 0, err
+	}
+	if err := xml.EscapeText(sf.currentSheet.writer, []byte(cellData)); err != nil {
+		return 0, err
+	}
+	if err := sf.currentSheet.write(cellClose); err != nil {
+		return 0, err
+	}
+	if err := sf.currentSheet.write(`</row>`); err != nil {
+		return 0, err
+	}
+	sf.currentSheet.columnCount++
+	return sf.currentSheet.columnCount - 1, sf.zipWriter.Flush()
 }
 
 // Error reports any error that has occurred during a previous Write or Flush.
@@ -200,26 +250,8 @@ func (sf *StreamFile) Close() error {
 			return err
 		}
 	}
-	marshal := func(thing interface{}) (string, error) {
-		body, err := xml.Marshal(thing)
-		if err != nil {
-			return "", err
-		}
-		return xml.Header + string(body), nil
-	}
-	xSST := sf.xlsxFile.referenceTable.makeXLSXSST()
-	parts := make(map[string]string)
-	var err error
-	parts["xl/sharedStrings.xml"], err = marshal(xSST)
-	w, err := sf.zipWriter.Create("xl/sharedStrings.xml")
-	if err != nil {
-		return err
-	}
-	_, err = w.Write([]byte(parts["xl/sharedStrings.xml"]))
-	if err != nil {
-		return err
-	}
-	err = sf.zipWriter.Close()
+
+	err := sf.zipWriter.Close()
 	if err != nil {
 		sf.err = err
 	}
